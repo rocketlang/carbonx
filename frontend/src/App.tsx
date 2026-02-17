@@ -9,6 +9,7 @@ import { VesselCiiDetail } from './pages/VesselCiiDetail.js';
 import { EtsDashboard } from './pages/EtsDashboard.js';
 import { FuelEuDashboard } from './pages/FuelEuDashboard.js';
 import { EexiDashboard } from './pages/EexiDashboard.js';
+import { CarbonCreditsDashboard } from './pages/CarbonCreditsDashboard.js';
 
 const NAV = [
   { to: '/dashboard',  icon: BarChart3,   label: 'Overview'   },
@@ -102,7 +103,7 @@ export default function App() {
           <Route path="/ets" element={<EtsDashboard />} />
           <Route path="/fueleu" element={<FuelEuDashboard />} />
           <Route path="/eexi" element={<EexiDashboard />} />
-          <Route path="/credits" element={<ComingSoon title="Carbon Credits — Phase 6" />} />
+          <Route path="/credits" element={<CarbonCreditsDashboard />} />
           <Route path="/reports" element={<ComingSoon title="Regulatory Reports — Phase 7" />} />
           <Route path="/settings" element={<ComingSoon title="Settings" />} />
         </Routes>
