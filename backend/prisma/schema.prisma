@@ -1,0 +1,311 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// MULTI-TENANCY
+// ─────────────────────────────────────────────
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique
+  type        String   @default("shipowner")
+
+  vessels     Vessel[]
+  users       User[]
+  etsAccounts EtsAccount[]
+  carbonCredits CarbonCredit[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@map("organizations")
+}
+
+model User {
+  id             String       @id @default(cuid())
+  email          String       @unique
+  name           String
+  passwordHash   String
+  role           String       @default("operator")
+  organizationId String
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  @@index([organizationId])
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// VESSELS
+// ─────────────────────────────────────────────
+
+model Vessel {
+  id              String   @id @default(cuid())
+  imo             String   @unique
+  name            String
+  type            String   // bulker, tanker, container, gas_carrier, ro_ro_cargo, lng_carrier
+  flag            String
+  dwt             Float
+  gt              Float
+  yearBuilt       Int
+  enginePowerKw   Float?
+  organizationId  String
+  mari8xVesselId  String?  // Link to Mari8X vessel ID for AIS data
+
+  organization    Organization  @relation(fields: [organizationId], references: [id])
+  voyages         Voyage[]
+  ciiRecords      CiiRecord[]
+  etsRecords      EtsRecord[]
+  fuelEuRecords   FuelEuRecord[]
+  eexiRecord      EexiRecord?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([organizationId])
+  @@map("vessels")
+}
+
+// ─────────────────────────────────────────────
+// VOYAGES
+// ─────────────────────────────────────────────
+
+model Voyage {
+  id                   String    @id @default(cuid())
+  vesselId             String
+  voyageNumber         String
+  departurePort        String
+  arrivalPort          String
+  departurePortCountry String    @default("")
+  arrivalPortCountry   String    @default("")
+  departureAt          DateTime
+  arrivalAt            DateTime?
+  distanceNm           Float     @default(0)
+
+  // Fuel consumption (metric tonnes by type)
+  hfoConsumedMt        Float     @default(0)
+  mgoConsumedMt        Float     @default(0)
+  lngConsumedMt        Float     @default(0)
+  methanolConsumedMt   Float     @default(0)
+  biofuelConsumedMt    Float     @default(0)
+
+  // Derived
+  co2EmissionsMt       Float     @default(0)
+  ghgIntensity         Float?
+
+  // EU ETS
+  etsScope             String    @default("none")
+  etsCo2Applicable     Float     @default(0)
+
+  // Workflow
+  status               String    @default("planned")   // planned, in_progress, completed, verified
+
+  vessel               Vessel    @relation(fields: [vesselId], references: [id])
+
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  @@index([vesselId])
+  @@index([etsScope])
+  @@index([status])
+  @@map("voyages")
+}
+
+// ─────────────────────────────────────────────
+// CII RECORDS
+// ─────────────────────────────────────────────
+
+model CiiRecord {
+  id               String   @id @default(cuid())
+  vesselId         String
+  year             Int
+
+  totalDistanceNm  Float    @default(0)
+  totalCo2G        Float    @default(0)
+  dwt              Float
+
+  attainedCii      Float?
+  requiredCii      Float?
+  ciiRatio         Float?
+  rating           String?
+
+  iceCorrectionApplied      Boolean @default(false)
+  shuttleCorrectionApplied  Boolean @default(false)
+  yearEndProjection         String?
+
+  vessel           Vessel   @relation(fields: [vesselId], references: [id])
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  @@unique([vesselId, year])
+  @@index([vesselId])
+  @@map("cii_records")
+}
+
+// ─────────────────────────────────────────────
+// EU ETS
+// ─────────────────────────────────────────────
+
+model EtsAccount {
+  id             String   @id @default(cuid())
+  organizationId String
+  accountNumber  String?
+  euaBalance     Float    @default(0)
+
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  records        EtsRecord[]
+  transactions   EtsTransaction[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@index([organizationId])
+  @@map("ets_accounts")
+}
+
+model EtsRecord {
+  id                String     @id @default(cuid())
+  vesselId          String
+  accountId         String
+  year              Int
+
+  totalCo2Mt        Float      @default(0)
+  applicablePct     Float      @default(0)
+  obligationMt      Float      @default(0)
+
+  euaSurrendered    Float      @default(0)
+  surrenderDeadline DateTime?
+  isSettled         Boolean    @default(false)
+
+  vessel            Vessel     @relation(fields: [vesselId], references: [id])
+  account           EtsAccount @relation(fields: [accountId], references: [id])
+
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  @@unique([vesselId, year])
+  @@map("ets_records")
+}
+
+model EtsTransaction {
+  id           String     @id @default(cuid())
+  accountId    String
+  type         String     // buy, sell, surrender, transfer
+  euaAmount    Float
+  priceEur     Float?
+  totalEur     Float?
+  notes        String?
+
+  account      EtsAccount @relation(fields: [accountId], references: [id])
+
+  transactedAt DateTime
+  createdAt    DateTime   @default(now())
+  @@index([accountId])
+  @@map("ets_transactions")
+}
+
+// ─────────────────────────────────────────────
+// FUELEU MARITIME
+// ─────────────────────────────────────────────
+
+model FuelEuRecord {
+  id                  String   @id @default(cuid())
+  vesselId            String
+  year                Int
+
+  actualGhgIntensity  Float?
+  targetGhgIntensity  Float?
+  ghgGap              Float?
+  totalEnergyMj       Float    @default(0)
+
+  isCompliant         Boolean  @default(false)
+  penaltyEur          Float    @default(0)
+
+  poolSurplusMj       Float    @default(0)
+  poolBorrowedMj      Float    @default(0)
+
+  vessel              Vessel   @relation(fields: [vesselId], references: [id])
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  @@unique([vesselId, year])
+  @@map("fueleu_records")
+}
+
+// ─────────────────────────────────────────────
+// EEXI
+// ─────────────────────────────────────────────
+
+model EexiRecord {
+  id                  String   @id @default(cuid())
+  vesselId            String   @unique
+
+  attainedEexi        Float?
+  requiredEexi        Float?
+  isCompliant         Boolean  @default(false)
+
+  enginePowerLimitKw  Float?
+  shaPowerLimitKw     Float?
+
+  certificateNumber   String?
+  certifiedAt         DateTime?
+  certifiedBy         String?
+
+  vessel              Vessel   @relation(fields: [vesselId], references: [id])
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  @@map("eexi_records")
+}
+
+// ─────────────────────────────────────────────
+// CARBON CREDITS
+// ─────────────────────────────────────────────
+
+model CarbonCredit {
+  id             String   @id @default(cuid())
+  organizationId String
+
+  standard       String   // gold_standard, verra_vcs, plan_vivo
+  projectId      String
+  projectName    String
+  projectType    String
+  country        String
+  vintage        Int
+  quantity       Float
+  priceUsd       Float?
+
+  status         String   @default("active")
+  retiredAt      DateTime?
+  retiredFor     String?
+  registryUrl    String?
+  serialNumber   String?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@index([organizationId])
+  @@map("carbon_credits")
+}
+
+// ─────────────────────────────────────────────
+// CARBON PRICE FEED
+// ─────────────────────────────────────────────
+
+model CarbonPriceFeed {
+  id         String   @id @default(cuid())
+  type       String   // eu_ets, voluntary_vcs, voluntary_gs
+  priceEur   Float
+  priceUsd   Float?
+  source     String
+  recordedAt DateTime @default(now())
+
+  @@index([type, recordedAt])
+  @@map("carbon_price_feed")
+}
