@@ -9,5 +9,6 @@ import './types/fueleu.js';
 import './types/eexi.js';
 import './types/carbon-credit.js';
 import './types/fleet-carbon.js';
+import './types/reports.js';
 
 export const schema = builder.toSchema();
