@@ -7,6 +7,8 @@ import { buildContext } from './schema/context.js';
 import { logger } from './utils/logger.js';
 import { scheduleCiiDailyRecalc } from './jobs/cii-daily-recalc.js';
 import { scheduleCiiDowngradeMonitor } from './jobs/cii-downgrade-monitor.js';
+import { scheduleEtsPriceSync } from './jobs/ets-price-sync.js';
+import { scheduleEtsSurrenderAlert } from './jobs/ets-surrender-alert.js';
 
 const app = Fastify({ logger: false });
 
@@ -36,10 +38,15 @@ try {
   await app.listen({ port, host });
   logger.info(`CarbonX API → http://${host}:${port}/graphql`);
 
-  // Schedule background jobs
+  // Phase 2 — CII Jobs
   await scheduleCiiDailyRecalc();
   await scheduleCiiDowngradeMonitor();
-  logger.info('Background jobs scheduled');
+
+  // Phase 3 — ETS Jobs
+  await scheduleEtsPriceSync();
+  await scheduleEtsSurrenderAlert();
+
+  logger.info('All background jobs scheduled');
 } catch (err) {
   logger.error(err);
   process.exit(1);
