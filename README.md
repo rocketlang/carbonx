@@ -16,8 +16,8 @@
 
 ## Stack
 
-- **Backend:** Fastify 5 + Pothos + Prisma 6 + GraphQL (Port 4052)
-- **Frontend:** React 19 + Vite + Apollo Client + Tailwind (Port 3009)
+- **Backend:** Fastify 5 + Pothos + Prisma 6 + GraphQL (Port 4053)
+- **Frontend:** React 19 + Vite + Apollo Client + Tailwind (Port 3013)
 - **Database:** PostgreSQL (`carbonx`)
 - **Jobs:** BullMQ + Redis
 

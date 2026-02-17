@@ -4,7 +4,7 @@
   "description": "CarbonX - Maritime Carbon Compliance Dashboard",
   "type": "module",
   "scripts": {
-    "dev": "vite --port 3009",
+    "dev": "vite --port 3013",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "codegen": "graphql-codegen --config codegen.ts"

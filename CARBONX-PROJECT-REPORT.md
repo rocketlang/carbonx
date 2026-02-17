@@ -4,7 +4,7 @@
 **Version:** 1.0.0
 **Date:** 2026-02-17
 **Stack:** Mari8X-pattern (Fastify + Pothos + Prisma + React 19)
-**Ports:** Backend `4052` · Frontend `3009`
+**Ports:** Backend `4053` · Frontend `3013`
 **Domain:** `carbonx.ankr.in` · `carbonx.mari8x.com`
 **Database:** `carbonx` (PostgreSQL)
 **Repo:** `https://github.com/rocketlang/carbonx`
