@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import {
   Ship, Leaf, Euro, Fuel, ShieldCheck, Award, BarChart3, FileText,
-  Settings, ChevronRight
+  Settings as SettingsIcon, ChevronRight, LogOut
 } from 'lucide-react';
 import { Dashboard } from './pages/Dashboard.js';
 import { CiiDashboard } from './pages/CiiDashboard.js';
@@ -11,29 +11,31 @@ import { FuelEuDashboard } from './pages/FuelEuDashboard.js';
 import { EexiDashboard } from './pages/EexiDashboard.js';
 import { CarbonCreditsDashboard } from './pages/CarbonCreditsDashboard.js';
 import { ReportsDashboard } from './pages/ReportsDashboard.js';
+import { Settings } from './pages/Settings.js';
+import { LoginPage } from './pages/LoginPage.js';
+import { ErrorBoundary } from './components/ErrorBoundary.js';
+import { useAuth } from './lib/auth.js';
 
 const NAV = [
-  { to: '/dashboard',  icon: BarChart3,   label: 'Overview'   },
-  { to: '/cii',        icon: Leaf,        label: 'CII'        },
-  { to: '/ets',        icon: Euro,        label: 'EU ETS'     },
-  { to: '/fueleu',     icon: Fuel,        label: 'FuelEU'     },
-  { to: '/eexi',       icon: ShieldCheck, label: 'EEXI'       },
-  { to: '/credits',    icon: Award,       label: 'Credits'    },
-  { to: '/reports',    icon: FileText,    label: 'Reports'    },
-  { to: '/settings',   icon: Settings,    label: 'Settings'   },
+  { to: '/dashboard',  icon: BarChart3,      label: 'Overview'   },
+  { to: '/cii',        icon: Leaf,           label: 'CII'        },
+  { to: '/ets',        icon: Euro,           label: 'EU ETS'     },
+  { to: '/fueleu',     icon: Fuel,           label: 'FuelEU'     },
+  { to: '/eexi',       icon: ShieldCheck,    label: 'EEXI'       },
+  { to: '/credits',    icon: Award,          label: 'Credits'    },
+  { to: '/reports',    icon: FileText,       label: 'Reports'    },
+  { to: '/settings',   icon: SettingsIcon,   label: 'Settings'   },
 ];
 
-function ComingSoon({ title }: { title: string }) {
-  return (
-    <div className="p-8 text-center text-gray-500 mt-24">
-      <div className="text-4xl mb-4">🔨</div>
-      <p className="text-lg font-medium text-gray-300">{title}</p>
-      <p className="text-sm mt-1">Coming in the next phase</p>
-    </div>
-  );
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return <>{children}</>;
 }
 
 function Layout({ children }: { children: React.ReactNode }) {
+  const { user, logout } = useAuth();
+
   return (
     <div className="flex h-screen bg-gray-950 overflow-hidden">
       {/* Sidebar */}
@@ -75,18 +77,25 @@ function Layout({ children }: { children: React.ReactNode }) {
             <div className="h-7 w-7 rounded-full bg-gray-700 flex items-center justify-center">
               <Ship className="h-3.5 w-3.5 text-gray-400" />
             </div>
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-gray-200 truncate">ANKR Labs</p>
-              <p className="text-xs text-gray-500">Starter plan</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-gray-200 truncate">{user?.name ?? 'ANKR Labs'}</p>
+              <p className="text-xs text-gray-500 truncate">{user?.role ?? 'operator'}</p>
             </div>
-            <ChevronRight className="h-3 w-3 text-gray-600 ml-auto shrink-0" />
+            <button
+              onClick={logout}
+              title="Sign out"
+              className="h-6 w-6 flex items-center justify-center rounded hover:bg-gray-700 transition-colors shrink-0"
+            >
+              <LogOut className="h-3 w-3 text-gray-600 hover:text-gray-400" />
+            </button>
+            <ChevronRight className="h-3 w-3 text-gray-600 shrink-0" />
           </div>
         </div>
       </aside>
 
       {/* Main content */}
       <main className="flex-1 overflow-y-auto scrollbar-thin">
-        {children}
+        <ErrorBoundary>{children}</ErrorBoundary>
       </main>
     </div>
   );
@@ -95,20 +104,30 @@ function Layout({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/cii" element={<CiiDashboard />} />
-          <Route path="/cii/:vesselId" element={<VesselCiiDetail />} />
-          <Route path="/ets" element={<EtsDashboard />} />
-          <Route path="/fueleu" element={<FuelEuDashboard />} />
-          <Route path="/eexi" element={<EexiDashboard />} />
-          <Route path="/credits" element={<CarbonCreditsDashboard />} />
-          <Route path="/reports" element={<ReportsDashboard />} />
-          <Route path="/settings" element={<ComingSoon title="Settings" />} />
-        </Routes>
-      </Layout>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/*"
+          element={
+            <RequireAuth>
+              <Layout>
+                <Routes>
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/cii" element={<CiiDashboard />} />
+                  <Route path="/cii/:vesselId" element={<VesselCiiDetail />} />
+                  <Route path="/ets" element={<EtsDashboard />} />
+                  <Route path="/fueleu" element={<FuelEuDashboard />} />
+                  <Route path="/eexi" element={<EexiDashboard />} />
+                  <Route path="/credits" element={<CarbonCreditsDashboard />} />
+                  <Route path="/reports" element={<ReportsDashboard />} />
+                  <Route path="/settings" element={<Settings />} />
+                </Routes>
+              </Layout>
+            </RequireAuth>
+          }
+        />
+      </Routes>
     </BrowserRouter>
   );
 }

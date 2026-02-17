@@ -1,6 +1,7 @@
 import { builder } from './builder.js';
 
 // Import all type definitions (registers queries/mutations as side effects)
+import './types/auth.js';
 import './types/vessel.js';
 import './types/voyage.js';
 import './types/cii.js';

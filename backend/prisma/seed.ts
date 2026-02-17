@@ -6,6 +6,7 @@
 import { PrismaClient } from '../generated/prisma/index.js';
 import { ciiService } from '../src/services/cii/cii-service.js';
 import { CO2_FACTORS } from '../src/services/cii/cii-calculator.js';
+import { hashPassword } from '../src/lib/crypto.js';
 
 const prisma = new PrismaClient();
 
@@ -31,7 +32,7 @@ async function main() {
     create: {
       email: 'admin@carbonx.ankr.in',
       name: 'CarbonX Admin',
-      passwordHash: 'seed-hash-change-before-production',
+      passwordHash: hashPassword('Admin1234!'),
       role: 'admin',
       organizationId: org.id,
     },
