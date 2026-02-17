@@ -7,6 +7,7 @@ import { Dashboard } from './pages/Dashboard.js';
 import { CiiDashboard } from './pages/CiiDashboard.js';
 import { VesselCiiDetail } from './pages/VesselCiiDetail.js';
 import { EtsDashboard } from './pages/EtsDashboard.js';
+import { FuelEuDashboard } from './pages/FuelEuDashboard.js';
 
 const NAV = [
   { to: '/dashboard',  icon: BarChart3,   label: 'Overview'   },
@@ -98,7 +99,7 @@ export default function App() {
           <Route path="/cii" element={<CiiDashboard />} />
           <Route path="/cii/:vesselId" element={<VesselCiiDetail />} />
           <Route path="/ets" element={<EtsDashboard />} />
-          <Route path="/fueleu" element={<ComingSoon title="FuelEU Maritime — Phase 4" />} />
+          <Route path="/fueleu" element={<FuelEuDashboard />} />
           <Route path="/eexi" element={<ComingSoon title="EEXI Manager — Phase 5" />} />
           <Route path="/credits" element={<ComingSoon title="Carbon Credits — Phase 6" />} />
           <Route path="/reports" element={<ComingSoon title="Regulatory Reports — Phase 7" />} />
