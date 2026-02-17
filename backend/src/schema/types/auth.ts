@@ -2,6 +2,31 @@ import { builder } from '../builder.js';
 import type { AuthUser } from '../context.js';
 import { verifyPassword, hashPassword } from '../../lib/crypto.js';
 
+// ─── Prisma model registrations (required by PrismaPlugin) ───────────────────
+
+builder.prismaObject('Organization', {
+  description: 'Shipping company / operator organization',
+  fields: (t) => ({
+    id:        t.exposeID('id'),
+    name:      t.exposeString('name'),
+    code:      t.exposeString('code'),
+    type:      t.exposeString('type'),
+    createdAt: t.expose('createdAt', { type: 'DateTime' }),
+  }),
+});
+
+builder.prismaObject('User', {
+  description: 'Platform user within an organization',
+  fields: (t) => ({
+    id:             t.exposeID('id'),
+    email:          t.exposeString('email'),
+    name:           t.exposeString('name'),
+    role:           t.exposeString('role'),
+    organizationId: t.exposeString('organizationId'),
+    createdAt:      t.expose('createdAt', { type: 'DateTime' }),
+  }),
+});
+
 // ─── Output types ────────────────────────────────────────────────────────────
 
 const AuthUserRef = builder.objectRef<AuthUser>('AuthUserType');
