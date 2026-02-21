@@ -11,5 +11,6 @@ import './types/eexi.js';
 import './types/carbon-credit.js';
 import './types/fleet-carbon.js';
 import './types/reports.js';
+import './types/cv-safety.js';
 
 export const schema = builder.toSchema();

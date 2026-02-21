@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import {
   Ship, Leaf, Euro, Fuel, ShieldCheck, Award, BarChart3, FileText,
-  Settings as SettingsIcon, ChevronRight, LogOut, Anchor
+  Settings as SettingsIcon, ChevronRight, LogOut, Anchor, Camera
 } from 'lucide-react';
 import { Dashboard } from './pages/Dashboard.js';
 import { CiiDashboard } from './pages/CiiDashboard.js';
@@ -14,6 +14,7 @@ import { ReportsDashboard } from './pages/ReportsDashboard.js';
 import { Settings } from './pages/Settings.js';
 import { VoyageDashboard } from './pages/VoyageDashboard.js';
 import { LoginPage } from './pages/LoginPage.js';
+import { CvSafetyDashboard } from './pages/CvSafetyDashboard.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { useAuth } from './lib/auth.js';
 
@@ -26,6 +27,7 @@ const NAV = [
   { to: '/eexi',       icon: ShieldCheck,    label: 'EEXI'       },
   { to: '/credits',    icon: Award,          label: 'Credits'    },
   { to: '/reports',    icon: FileText,       label: 'Reports'    },
+  { to: '/cv-safety',  icon: Camera,         label: 'CV Safety'  },
   { to: '/settings',   icon: SettingsIcon,   label: 'Settings'   },
 ];
 
@@ -123,8 +125,9 @@ export default function App() {
                   <Route path="/fueleu" element={<FuelEuDashboard />} />
                   <Route path="/eexi" element={<EexiDashboard />} />
                   <Route path="/credits" element={<CarbonCreditsDashboard />} />
-                  <Route path="/reports" element={<ReportsDashboard />} />
-                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/reports"    element={<ReportsDashboard />} />
+                  <Route path="/cv-safety"  element={<CvSafetyDashboard />} />
+                  <Route path="/settings"   element={<Settings />} />
                 </Routes>
               </Layout>
             </RequireAuth>

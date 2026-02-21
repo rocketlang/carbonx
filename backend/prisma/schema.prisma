@@ -309,3 +309,64 @@ model CarbonPriceFeed {
   @@index([type, recordedAt])
   @@map("carbon_price_feed")
 }
+
+// ─────────────────────────────────────────────
+// CV SAFETY (Maritime / Vessel-level)
+// ─────────────────────────────────────────────
+
+model CctvCamera {
+  id           String    @id @default(cuid())
+  terminalId   String    // vesselId or port terminal ID
+  cameraCode   String
+  name         String
+  zone         String    // bridge, engine_room, deck, cargo_hold, accommodation, gangway
+  location     String
+  status       String    @default("active")  // active, offline, maintenance
+  domainType   String    @default("MARITIME")
+  streamUrl    String?
+  manufacturer String?
+  model        String?
+  lastPingAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([terminalId])
+  @@map("cctv_cameras")
+}
+
+model SafetyIncident {
+  id             String   @id @default(cuid())
+  terminalId     String
+  cameraId       String?
+  incidentType   String   // fire, man_overboard, flooding, collision, medical, security, ppe_violation
+  severity       String   @default("medium")  // low, medium, high, critical
+  status         String   @default("open")    // open, acknowledged, resolved, escalated
+  location       String
+  description    String
+  detectedBy     String   @default("manual")  // manual, ai_camera, sensor
+  domainType     String   @default("MARITIME")
+  detectedAt     DateTime @default(now())
+  acknowledgedBy String?
+  resolvedBy     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([terminalId])
+  @@index([status])
+  @@map("safety_incidents")
+}
+
+model SafetyRule {
+  id          String   @id @default(cuid())
+  terminalId  String
+  name        String
+  description String
+  ruleType    String   // ppe, fire_safety, man_overboard, hazmat, navigation
+  severity    String   @default("medium")
+  isActive    Boolean  @default(true)
+  domainType  String   @default("MARITIME")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([terminalId])
+  @@map("safety_rules")
+}
