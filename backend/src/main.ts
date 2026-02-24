@@ -5,6 +5,7 @@ import mercurius from 'mercurius';
 import { schema } from './schema/index.js';
 import { buildContext } from './schema/context.js';
 import { logger } from './utils/logger.js';
+import { PrismaClient } from '../generated/prisma/index.js';
 import { scheduleCiiDailyRecalc } from './jobs/cii-daily-recalc.js';
 import { scheduleCiiDowngradeMonitor } from './jobs/cii-downgrade-monitor.js';
 import { scheduleEtsPriceSync } from './jobs/ets-price-sync.js';
@@ -24,12 +25,22 @@ await app.register(mercurius, {
   path: '/graphql',
 });
 
-app.get('/health', async () => ({
-  status: 'ok',
-  service: 'carbonx-backend',
-  version: '1.0.0',
-  timestamp: new Date().toISOString(),
-}));
+const _prismaHealth = new PrismaClient();
+
+app.get('/health', async (_req, reply) => {
+  let db: 'ok' | 'error' = 'ok';
+  try { await _prismaHealth.$queryRaw`SELECT 1`; } catch { db = 'error'; }
+
+  const status = db === 'ok' ? 'ok' : 'degraded';
+  reply.code(db === 'ok' ? 200 : 503);
+  return {
+    status,
+    service:   'carbonx-backend',
+    version:   '1.0.0',
+    timestamp: new Date().toISOString(),
+    checks: { db },
+  };
+});
 
 const port = Number(process.env.PORT) || 4053;
 const host = process.env.HOST || '0.0.0.0';

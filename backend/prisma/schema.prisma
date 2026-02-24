@@ -183,6 +183,23 @@ model EtsRecord {
   surrenderDeadline DateTime?
   isSettled         Boolean    @default(false)
 
+  // MRV — Monitoring, Reporting, Verification (Art. 11, Reg. 2015/757)
+  verifiedCo2Mt     Float?     // Third-party verified CO₂ (overrides totalCo2Mt for obligation)
+  mrvMethod         String?    // A/B/C/D per MRV Regulation
+  verificationBody  String?    // e.g. "Bureau Veritas", "DNV"
+  verifiedAt        DateTime?  // Date of verification sign-off
+  aerSubmitted      Boolean    @default(false)  // Annual Emissions Report submitted
+  aerSubmittedAt    DateTime?
+
+  // Compliance & penalties (Art. 16 — €100/tonne fine for shortfall)
+  complianceStatus  String?    // compliant | non_compliant | pending | under_review
+  penaltyEur        Float?     // Calculated fine if shortfall not covered
+  penaltyPaidAt     DateTime?
+
+  // Allowance banking — carry surplus to next year (Art. 13)
+  surplusBankedMt   Float      @default(0)  // EUAs carried forward from this year
+  bankedFromYear    Int?       // Surplus imported from prior year
+
   vessel            Vessel     @relation(fields: [vesselId], references: [id])
   account           EtsAccount @relation(fields: [accountId], references: [id])
 

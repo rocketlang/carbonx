@@ -155,6 +155,85 @@ export function daysUntilSurrender(year: number): number {
   return Math.ceil((deadline.getTime() - now.getTime()) / 86_400_000);
 }
 
+// ─────────────────────────────────────────────
+// PENALTY CALCULATION
+// Art. 16 EU ETS Directive — €100/tonne for each uncovered EUA
+// Penalty does NOT extinguish the obligation (must still surrender)
+// ─────────────────────────────────────────────
+
+export const ETS_PENALTY_PER_TONNE_EUR = 100;
+
+export interface EtsComplianceResult {
+  status:          'compliant' | 'non_compliant' | 'pending';
+  shortfallMt:     number;
+  penaltyEur:      number;
+  surplusMt:       number;   // EUAs available to bank to next year
+  settledPct:      number;
+}
+
+/**
+ * Calculate compliance status and penalty for an ETS record.
+ * @param obligationMt   - Total EUAs required (post phase-in)
+ * @param euaSurrendered - EUAs already surrendered
+ * @param deadlinePassed - Whether 30 April deadline has passed
+ */
+export function calculateEtsCompliance(
+  obligationMt: number,
+  euaSurrendered: number,
+  deadlinePassed: boolean,
+): EtsComplianceResult {
+  const shortfallMt = Math.max(0, obligationMt - euaSurrendered);
+  const surplusMt   = Math.max(0, euaSurrendered - obligationMt);
+  const settledPct  = obligationMt > 0
+    ? Math.min(100, (euaSurrendered / obligationMt) * 100)
+    : 100;
+
+  let status: EtsComplianceResult['status'];
+  if (shortfallMt === 0) {
+    status = 'compliant';
+  } else if (deadlinePassed) {
+    status = 'non_compliant';
+  } else {
+    status = 'pending';
+  }
+
+  const penaltyEur = status === 'non_compliant'
+    ? shortfallMt * ETS_PENALTY_PER_TONNE_EUR
+    : 0;
+
+  return { status, shortfallMt, penaltyEur, surplusMt, settledPct };
+}
+
+// ─────────────────────────────────────────────
+// ALLOWANCE BANKING
+// Art. 13 — unused EUAs can be banked to future years (no expiry)
+// ─────────────────────────────────────────────
+
+/**
+ * Calculate how many EUAs can be banked to next year.
+ * surplus = max(0, surrendered − obligation)
+ * These can be carried forward; they don't expire.
+ */
+export function calculateBankableAllowances(
+  obligationMt: number,
+  euaSurrendered: number,
+): number {
+  return Math.max(0, euaSurrendered - obligationMt);
+}
+
+/**
+ * Effective obligation after applying banked allowances from prior year.
+ */
+export function applyBankedAllowances(
+  obligationMt: number,
+  bankedMt: number,
+): { netObligationMt: number; bankedUsed: number; bankedRemaining: number } {
+  const bankedUsed      = Math.min(bankedMt, obligationMt);
+  const netObligationMt = Math.max(0, obligationMt - bankedUsed);
+  const bankedRemaining = bankedMt - bankedUsed;
+  return { netObligationMt, bankedUsed, bankedRemaining };
+}
+
 /**
  * ETS cost forecast for the remainder of the year,
  * based on YTD pace and current carbon price.

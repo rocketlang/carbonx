@@ -12,6 +12,9 @@ import {
   daysUntilSurrender,
   forecastFullYearEtsCost,
   ETS_PHASE_IN,
+  calculateEtsCompliance,
+  calculateBankableAllowances,
+  ETS_PENALTY_PER_TONNE_EUR,
 } from '../../services/ets/ets-calculator.js';
 
 // ─────────────────────────────────────────────
@@ -44,6 +47,23 @@ builder.prismaObject('EtsRecord', {
     surrenderDeadline: t.expose('surrenderDeadline', { type: 'DateTime', nullable: true }),
     isSettled: t.exposeBoolean('isSettled'),
 
+    // MRV — Monitoring, Reporting, Verification
+    verifiedCo2Mt: t.exposeFloat('verifiedCo2Mt', { nullable: true }),
+    mrvMethod: t.exposeString('mrvMethod', { nullable: true }),
+    verificationBody: t.exposeString('verificationBody', { nullable: true }),
+    verifiedAt: t.expose('verifiedAt', { type: 'DateTime', nullable: true }),
+    aerSubmitted: t.exposeBoolean('aerSubmitted'),
+    aerSubmittedAt: t.expose('aerSubmittedAt', { type: 'DateTime', nullable: true }),
+
+    // Compliance & penalties
+    complianceStatus: t.exposeString('complianceStatus', { nullable: true }),
+    penaltyEur: t.exposeFloat('penaltyEur', { nullable: true }),
+    penaltyPaidAt: t.expose('penaltyPaidAt', { type: 'DateTime', nullable: true }),
+
+    // Allowance banking
+    surplusBankedMt: t.exposeFloat('surplusBankedMt'),
+    bankedFromYear: t.exposeInt('bankedFromYear', { nullable: true }),
+
     // Computed
     shortfallMt: t.field({
       type: 'Float',
@@ -53,6 +73,16 @@ builder.prismaObject('EtsRecord', {
       type: 'Float',
       resolve: (r) =>
         r.obligationMt > 0 ? Math.min(100, (r.euaSurrendered / r.obligationMt) * 100) : 0,
+    }),
+    bankableMt: t.field({
+      type: 'Float',
+      description: 'EUAs that can be banked to next year (surplus after obligation)',
+      resolve: (r) => calculateBankableAllowances(r.obligationMt, r.euaSurrendered),
+    }),
+    penaltyPerTonne: t.field({
+      type: 'Float',
+      description: 'Statutory penalty rate (€100/tonne per Art. 16)',
+      resolve: () => ETS_PENALTY_PER_TONNE_EUR,
     }),
 
     vessel: t.relation('vessel'),
@@ -466,5 +496,239 @@ builder.mutationField('calculateFleetEts', (t) =>
     args: { year: t.arg.int({ required: true }) },
     resolve: async (_root, args, ctx) =>
       etsService.calculateFleetEts(ctx.orgId(), args.year, ctx.prisma),
+  }),
+);
+
+// ─────────────────────────────────────────────
+// COMPLIANCE STATUS
+// ─────────────────────────────────────────────
+
+const EtsComplianceStatus = builder.objectRef<{
+  vesselId:      string;
+  year:          number;
+  status:        string;
+  shortfallMt:   number;
+  penaltyEur:    number;
+  surplusMt:     number;
+  settledPct:    number;
+  deadlinePassed: boolean;
+  daysRemaining: number;
+}>('EtsComplianceStatus');
+
+EtsComplianceStatus.implement({
+  fields: (t) => ({
+    vesselId:       t.exposeString('vesselId'),
+    year:           t.exposeInt('year'),
+    status:         t.exposeString('status'),
+    shortfallMt:    t.exposeFloat('shortfallMt'),
+    penaltyEur:     t.exposeFloat('penaltyEur'),
+    surplusMt:      t.exposeFloat('surplusMt'),
+    settledPct:     t.exposeFloat('settledPct'),
+    deadlinePassed: t.exposeBoolean('deadlinePassed'),
+    daysRemaining:  t.exposeInt('daysRemaining'),
+  }),
+});
+
+builder.queryField('etsComplianceStatus', (t) =>
+  t.field({
+    type: [EtsComplianceStatus],
+    description: 'Compliance status + penalty for each vessel for a given year',
+    args: { year: t.arg.int({ required: true }) },
+    resolve: async (_root, args, ctx) => {
+      const records = await ctx.prisma.etsRecord.findMany({
+        where: { year: args.year, vessel: ctx.orgFilter() },
+      });
+      const days     = daysUntilSurrender(args.year);
+      const deadline = days < 0;
+
+      return records.map((r) => {
+        const c = calculateEtsCompliance(r.obligationMt, r.euaSurrendered, deadline);
+        return {
+          vesselId:       r.vesselId,
+          year:           r.year,
+          status:         c.status,
+          shortfallMt:    c.shortfallMt,
+          penaltyEur:     c.penaltyEur,
+          surplusMt:      c.surplusMt,
+          settledPct:     c.settledPct,
+          deadlinePassed: deadline,
+          daysRemaining:  Math.max(0, days),
+        };
+      });
+    },
+  }),
+);
+
+// ─────────────────────────────────────────────
+// FLEET COMPLIANCE SUMMARY
+// ─────────────────────────────────────────────
+
+const FleetComplianceSummary = builder.objectRef<{
+  year:               number;
+  totalVessels:       number;
+  compliantVessels:   number;
+  nonCompliantVessels: number;
+  pendingVessels:     number;
+  totalShortfallMt:   number;
+  totalPenaltyEur:    number;
+  totalSurplusMt:     number;
+  daysUntilDeadline:  number;
+}>('FleetComplianceSummary');
+
+FleetComplianceSummary.implement({
+  fields: (t) => ({
+    year:                t.exposeInt('year'),
+    totalVessels:        t.exposeInt('totalVessels'),
+    compliantVessels:    t.exposeInt('compliantVessels'),
+    nonCompliantVessels: t.exposeInt('nonCompliantVessels'),
+    pendingVessels:      t.exposeInt('pendingVessels'),
+    totalShortfallMt:    t.exposeFloat('totalShortfallMt'),
+    totalPenaltyEur:     t.exposeFloat('totalPenaltyEur'),
+    totalSurplusMt:      t.exposeFloat('totalSurplusMt'),
+    daysUntilDeadline:   t.exposeInt('daysUntilDeadline'),
+  }),
+});
+
+builder.queryField('fleetComplianceSummary', (t) =>
+  t.field({
+    type: FleetComplianceSummary,
+    description: 'Fleet-wide compliance summary: penalties, shortfalls, surplus, deadline countdown',
+    args: { year: t.arg.int({ required: true }) },
+    resolve: async (_root, args, ctx) => {
+      const records = await ctx.prisma.etsRecord.findMany({
+        where: { year: args.year, vessel: ctx.orgFilter() },
+      });
+      const days     = daysUntilSurrender(args.year);
+      const deadline = days < 0;
+
+      let compliant = 0, nonCompliant = 0, pending = 0;
+      let totalShortfall = 0, totalPenalty = 0, totalSurplus = 0;
+
+      for (const r of records) {
+        const c = calculateEtsCompliance(r.obligationMt, r.euaSurrendered, deadline);
+        if (c.status === 'compliant')     compliant++;
+        else if (c.status === 'non_compliant') nonCompliant++;
+        else                              pending++;
+        totalShortfall += c.shortfallMt;
+        totalPenalty   += c.penaltyEur;
+        totalSurplus   += c.surplusMt;
+      }
+
+      return {
+        year:               args.year,
+        totalVessels:       records.length,
+        compliantVessels:   compliant,
+        nonCompliantVessels: nonCompliant,
+        pendingVessels:     pending,
+        totalShortfallMt:   totalShortfall,
+        totalPenaltyEur:    totalPenalty,
+        totalSurplusMt:     totalSurplus,
+        daysUntilDeadline:  Math.max(0, days),
+      };
+    },
+  }),
+);
+
+// ─────────────────────────────────────────────
+// MRV — SUBMIT VERIFICATION
+// ─────────────────────────────────────────────
+
+builder.mutationField('submitMrvVerification', (t) =>
+  t.prismaField({
+    type: 'EtsRecord',
+    description: 'Record third-party MRV verification for a vessel-year',
+    args: {
+      vesselId:         t.arg.string({ required: true }),
+      year:             t.arg.int({ required: true }),
+      verifiedCo2Mt:    t.arg.float({ required: true }),
+      mrvMethod:        t.arg.string({ required: true }),
+      verificationBody: t.arg.string({ required: true }),
+    },
+    resolve: async (query, _root, args, ctx) => {
+      const record = await ctx.prisma.etsRecord.findUnique({
+        where: { vesselId_year: { vesselId: args.vesselId, year: args.year } },
+      });
+      if (!record) throw new Error(`No ETS record for vessel ${args.vesselId} year ${args.year}`);
+
+      return ctx.prisma.etsRecord.update({
+        ...query,
+        where: { id: record.id },
+        data: {
+          verifiedCo2Mt:    args.verifiedCo2Mt,
+          mrvMethod:        args.mrvMethod,
+          verificationBody: args.verificationBody,
+          verifiedAt:       new Date(),
+        },
+      });
+    },
+  }),
+);
+
+builder.mutationField('submitAer', (t) =>
+  t.prismaField({
+    type: 'EtsRecord',
+    description: 'Mark Annual Emissions Report as submitted to competent authority',
+    args: {
+      vesselId: t.arg.string({ required: true }),
+      year:     t.arg.int({ required: true }),
+    },
+    resolve: async (query, _root, args, ctx) => {
+      const record = await ctx.prisma.etsRecord.findUnique({
+        where: { vesselId_year: { vesselId: args.vesselId, year: args.year } },
+      });
+      if (!record) throw new Error(`No ETS record for vessel ${args.vesselId} year ${args.year}`);
+
+      return ctx.prisma.etsRecord.update({
+        ...query,
+        where: { id: record.id },
+        data: { aerSubmitted: true, aerSubmittedAt: new Date() },
+      });
+    },
+  }),
+);
+
+// ─────────────────────────────────────────────
+// ALLOWANCE BANKING — CARRY FORWARD SURPLUS
+// ─────────────────────────────────────────────
+
+builder.mutationField('bankSurplusAllowances', (t) =>
+  t.field({
+    type: 'JSON',
+    description: 'Carry forward surplus EUAs from one year to the next (Art. 13 banking)',
+    args: {
+      vesselId: t.arg.string({ required: true }),
+      fromYear: t.arg.int({ required: true }),
+    },
+    resolve: async (_root, args, ctx) => {
+      const source = await ctx.prisma.etsRecord.findUnique({
+        where: { vesselId_year: { vesselId: args.vesselId, year: args.fromYear } },
+      });
+      if (!source) throw new Error(`No ETS record for vessel ${args.vesselId} year ${args.fromYear}`);
+
+      const surplusMt = Math.max(0, source.euaSurrendered - source.obligationMt);
+      if (surplusMt === 0) return { banked: 0, message: 'No surplus to bank' };
+
+      // Update source year with banked amount
+      await ctx.prisma.etsRecord.update({
+        where: { id: source.id },
+        data: { surplusBankedMt: surplusMt },
+      });
+
+      // Create or update target year record with banked allowances
+      const targetYear = args.fromYear + 1;
+      await ctx.prisma.etsRecord.upsert({
+        where: { vesselId_year: { vesselId: args.vesselId, year: targetYear } },
+        update: { bankedFromYear: args.fromYear },
+        create: {
+          vesselId:    args.vesselId,
+          accountId:   source.accountId,
+          year:        targetYear,
+          bankedFromYear: args.fromYear,
+          surrenderDeadline: getSurrenderDeadline(targetYear),
+        },
+      });
+
+      return { banked: surplusMt, fromYear: args.fromYear, toYear: targetYear };
+    },
   }),
 );
